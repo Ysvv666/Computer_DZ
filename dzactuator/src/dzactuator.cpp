@@ -537,43 +537,15 @@ void turn_on_robot::callback_monter_control(const geometry_msgs::Twist::ConstPtr
 
 void turn_on_robot::CaremaMontorControl()
 {
+  if(stop_point_signal_msg == 1){
+   
+    moveBaseControl.Position_0 = 1750;//云台上移部分，固定仰角，根据物资高度自行决定
 
-  if(find_center == false && find_wuzi == false)//find_center只与靶子有关
-  {
-    //只左右摆头时，如果你想调打靶PID，请取消下列注释 只左右摆头
-    // /////////////////////////现在是只左右摆头打靶 不识别物资的情况 便于调pid识别///////////////////////////////////////
-    // static int direction_yaw = -1;      // 左右方向
-    // static int step_yaw = 80;          // 左右步幅
-    // static int scan_interval_yaw = 0;    // 左右独立计时器
-    // static int period_yaw = 1;         // 左右周期（越大越慢）
-
-    // // ====================== 左右轴 独立定时移动 ======================
-    // if (scan_interval_yaw++ >= period_yaw)
-    // {
-    //   scan_interval_yaw = 0;
-    //   moveBaseControl.Position_1 += direction_yaw * step_yaw;
-
-    //   // 左右限位
-    //   if (moveBaseControl.Position_1 >= 4000)
-    //     direction_yaw = -1;
-    //   else if (moveBaseControl.Position_1 <= 100)
-    //     direction_yaw = 1;
-    // }
-    // moveBaseControl.Speed_1 = 2600;//x云台速度
-
-
-    // ====================== 以下是左右上下同时摆头 ======================
     // ====================== 左右扫描（Yaw）参数 ======================
     static int direction_yaw = -1;      // 左右方向
     static int step_yaw = 80;          // 左右步幅
     static int scan_interval_yaw = 0;    // 左右独立计时器
     static int period_yaw = 1;         // 左右周期（越大越慢）
-
-    // ====================== 上下扫描（Pitch）参数 ======================
-    static int direction_pitch = 1;     // 上下方向
-    static int step_pitch = 80;          // 上下步幅
-    static int scan_interval_pitch = 0;  // 上下独立计时器
-    static int period_pitch = 1;        // 上下周期（和左右不一样）
 
     // ====================== 左右轴 独立定时移动 ======================
     if (scan_interval_yaw++ >= period_yaw)
@@ -588,23 +560,14 @@ void turn_on_robot::CaremaMontorControl()
         direction_yaw = 1;
     }
 
-    // ====================== 上下轴 独立定时移动 ======================
-    if (scan_interval_pitch++ >= period_pitch)
-    {
-      scan_interval_pitch = 0;
-      moveBaseControl.Position_0 += direction_pitch * step_pitch;
-
-      // 上下限位
-      if (moveBaseControl.Position_0 >= 2100)//下
-        direction_pitch = -1;
-      else if (moveBaseControl.Position_0 <= 1750)//上
-        direction_pitch = 1;
-    }
-
     // ====================== 速度设置 ======================
     moveBaseControl.Speed_0 = 5000;
     moveBaseControl.Speed_1 = 2400;
   }
+  //如果你想让小车什么也没识别到的时候进入扫描状态，就用下面这个if判断，并注释上面
+  // if(find_center == false && find_wuzi == false)//find_center只与靶子有关，find_wuzi只与物资有关
+  // {
+  // }
 }
 
 

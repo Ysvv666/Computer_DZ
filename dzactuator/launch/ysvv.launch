@@ -24,9 +24,4 @@
   <include file="/home/duzhong/dzacs/src/dzactuator/launch/dznavigation.launch">
   </include>
 
-  <!-- 中控
-  <include file="/home/duzhong/ros_ws/src/brain/launch/brain.launch">
-    <arg name="we_are_blue" value="$(arg we_are_blue)"/>
-  </include> -->
-
 </launch>

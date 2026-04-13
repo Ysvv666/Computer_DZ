@@ -750,7 +750,7 @@ namespace move_base
               continue;
             }
             /***********����ͣ��**********/
-            // ����ͣ���㣬ͣ�̶�ʱ��
+
             if (detectReachedGoal(current_position, stopPoints[road_points_index]))
             {
               publishZeroVelocity();
@@ -762,21 +762,24 @@ namespace move_base
                 stop_point_signal_msg.data =1;
                 stop_point_signal.publish(stop_point_signal_msg);              
               }
-              const double stop_duration_sec = is_long_stop_point ? 10.0 : 0.02;//ͣ��ʱ�䣺Ŀ���10s����Ŀ���0.02s
-              ros::Duration(stop_duration_sec).sleep();
+              const double stop_duration_sec = is_long_stop_point ? 10.0 : 0;//ͣ��ʱ�䣺Ŀ���10s����Ŀ���0.02s
+              if(stop_duration_sec==10.0){
+                printf("move_base-->long stop point, stop for %.2f seconds\n", stop_duration_sec);
+                stop_point_signal_msg.data =1;
+
+                ros::Duration(stop_duration_sec).sleep();//这边设置停止点的时常Ysvv********************************************
+              }
+             
               SP_deleted_flag = 1;
               road_points_index++;
               roadPoints = road_paths[road_points_index];
               new_plan = true;
               stop_point_signal_msg.data =0;
+
               stop_point_signal.publish(stop_point_signal_msg);
               continue;
             }
-
-            /***********����ͣ��  end **********/
-            //----------------start for pure pursuit----------------
-            //�˴���foundObstacleFlag = 2����ʼ��ʹ�ô�׷���㷨��
-            // ���������ϰ���ʱʹ�ñ����㷨�����δ���
+            //想开启避障，就把下面这行注释掉
             foundObstacleFlag = 2;
 
 
