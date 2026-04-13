@@ -762,12 +762,12 @@ namespace move_base
                 stop_point_signal_msg.data =1;
                 stop_point_signal.publish(stop_point_signal_msg);              
               }
-              const double stop_duration_sec = is_long_stop_point ? 10.0 : 0;//ͣ��ʱ�䣺Ŀ���10s����Ŀ���0.02s
-              if(stop_duration_sec==10.0){
+              const double stop_duration_sec = is_long_stop_point ? 1: 0;//ͣ��ʱ�䣺Ŀ���10s����Ŀ���0.02s
+              if(stop_duration_sec==1){
                 printf("move_base-->long stop point, stop for %.2f seconds\n", stop_duration_sec);
                 stop_point_signal_msg.data =1;
-
-                ros::Duration(stop_duration_sec).sleep();//这边设置停止点的时常Ysvv********************************************
+                printf("睡觉10s");
+                ros::Duration(10).sleep();//这边设置停止点的时常Ysvv********************************************
               }
              
               SP_deleted_flag = 1;
