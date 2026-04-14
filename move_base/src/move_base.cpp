@@ -813,16 +813,19 @@ void MoveBase::callback_find_wuzi_flag(const std_msgs::UInt8::ConstPtr &msg)
              
 
                 ros::Time find_start = ros::Time::now();
-                while (find_wuzi_flag == 0)
-                {
-                  ROS_INFO("%d\n",find_wuzi_flag);
-                  ROS_INFO("Stopping.............................................");
-                  if ((ros::Time::now() - find_start).toSec() > 10.0)
+                while ((ros::ok() && find_wuzi_flag == 0) || ((ros::Time::now() - find_start).toSec() <3.0))//ros::ok(）是为了防止阻塞进程无法正常关闭
+                {                                                                                                                                   //3秒内就算找到物资也不走，防止误判导致没识别到真正的物资
+                  ROS_INFO("Stopping.............................................");                                                        //后期国赛模型识别度高之后建议改成2秒，甚至1秒0秒
+                  ros::spinOnce();//处理回调函数！！！！！！！！！！！                    因为我们前面对识别的要求已经很高了，不仅判断连续4-7次，也判断置信度
+
+                  ros::Duration(0.05).sleep(); //越小 表示检测到物资就走得 越”快“
+
+                  if ((ros::Time::now() - find_start).toSec() > 10.0)//如果小车停止10s还没有检测到物资就直接走。
                   {
                     ROS_WARN("move_base: timeout waiting for find_wuzi_flag after 10s, continuing");
                     break;
                   }
-                  ros::Duration(0.05).sleep(); //越小 表示检测到物资就走得 越快
+                  
                 }
               }
             

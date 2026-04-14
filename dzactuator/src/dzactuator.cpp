@@ -514,7 +514,7 @@ void turn_on_robot::callback_pt_det_topic(const std_msgs::Int32MultiArray::Const
     {   
           if(stop_point_signal_msg == 1){//确保此时是停止状态，防止行进过程中误报
                 //**************判断置信度ysvv***************/
-                if (msg->data[3]>65){ //如果置信度大于xx%  这个值根据现场情况调节
+                if (msg->data[3]>60){ //如果置信度大于xx%  这个值根据现场情况调节
                       ROS_INFO("msg->data[3]=%d", msg->data[3]);
                       find_wuzi_flag = 1;
                       ROS_INFO("find_wuzi_flag = %d", find_wuzi_flag);
