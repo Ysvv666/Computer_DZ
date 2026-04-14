@@ -6,7 +6,7 @@
 #include <tf2/convert.h>
 #include <tf2/utils.h>
 
-// move_hit_goal_flag is received via ROS topic subscription
+
 sensor_msgs::Imu Mpu6050;
 
 turn_on_robot::turn_on_robot() : Power_voltage(0)
@@ -31,6 +31,9 @@ turn_on_robot::turn_on_robot() : Power_voltage(0)
 
   stop_point_signal_msg = 0;
   find_center = false;
+
+  find_wuzi_flag = 0;
+  move_hit_goal_flag_local = 1;
 
   return_center = false;
   memset(&Robot_Pos, 0, sizeof(Robot_Pos));
@@ -79,11 +82,14 @@ turn_on_robot::turn_on_robot() : Power_voltage(0)
   sub_monter_control = n.subscribe("/carema_monter_node/monter_control", 1, &turn_on_robot::callback_monter_control, this);     //云台控制回调                    
   sub_stop_point_singal = n.subscribe("/move_base/stop_signal",1,&turn_on_robot::callback_stop_point_signal,this);              //停车状态回调
 
+    // subscribe to published road points index (which stop point we are at)
+    sub_road_points_index = n.subscribe("/road_points_index", 1, &turn_on_robot::callback_road_points_index, this);
+
   sub_pt_det_topic = n.subscribe("/pt_det_topic",1,&turn_on_robot::callback_pt_det_topic,this); //识别信息回调
   sub_offset_center = n.subscribe("offset_center", 1, &turn_on_robot::callback_offset_center, this); //打靶瞄准
   sub_voice_switch = n.subscribe("/voice_switch",1,&turn_on_robot::callback_voice_switch,this);  //物资语音播报+瞄准                     
   // subscribe to move_hit_goal flag published by move_base
-  move_hit_goal_sub = n.subscribe("/move_base/move_hit_goal_flag", 1, &turn_on_robot::moveHitGoalCallback, this);
+  move_hit_goal_sub = n.subscribe("/move_hit_goal_flag", 1, &turn_on_robot::moveHitGoalCallback, this);
 
 
   imu_buff.clear();
@@ -490,41 +496,49 @@ void turn_on_robot::callback_pt_det_topic(const std_msgs::Int32MultiArray::Const
     }
 
     // 次数未到，不进入后续处理
-    if(msg_trust_count <= 5) {
+    if(msg_trust_count <= 5) {//判断五次相同才认为看到同一个东西（没识别到也同理）
         return;
     }
 
-    //**************超过阈值才处理各类ID***************/
+
+
+ //*********************识别到靶子**********************//
     if(current_id == 116 || current_id == 117 || current_id == 118) //识别到goal(没亮),redgoal,unhitgoal(bluegoal)
     {
         find_center = true;
         pub_offset_center.publish(*msg);
     }
-    else if(current_id >= 101 && current_id <= 115) //识别到物资（或者数字）
-    {   
-        //**************判断置信度ysvv***************/
-        if (msg->data[3]<55 && msg->data[3]>0){ //如果置信度小于xx%  这个值根据现场情况调节，wanghaoran
-            return;
-        }
 
-        find_wuzi_flag = true;
-        std_msgs::UInt8 fu;
-        fu.data = static_cast<uint8_t>(find_wuzi_flag ? 1 : 0);
-        pub_find_wuzi_flag.publish(fu);
-        
-        std_msgs::UInt8 voice_msg;
-        voice_msg.data = current_id;
-        pub_voice_switch.publish(voice_msg);
+    //*********************识别到物资**********************//
+    else if(current_id >= 101 && current_id <= 115) //识别到物资
+    {   
+          if(stop_point_signal_msg == 1){//确保此时是停止状态，防止行进过程中误报
+                //**************判断置信度ysvv***************/
+                if (msg->data[3]>65){ //如果置信度大于xx%  这个值根据现场情况调节
+                      ROS_INFO("msg->data[3]=%d", msg->data[3]);
+                      find_wuzi_flag = 1;
+                      ROS_INFO("find_wuzi_flag = %d", find_wuzi_flag);
+                      std_msgs::UInt8 fu;
+                      fu.data = static_cast<uint8_t>(find_wuzi_flag ? 1 : 0);
+                      pub_find_wuzi_flag.publish(fu);
+                      
+                      std_msgs::UInt8 voice_msg;
+                      voice_msg.data = current_id;
+                      pub_voice_switch.publish(voice_msg);              
+                }
+          }
     }
-    else if(current_id == -1)//啥也没识别到
+     //*********************啥也没识别到**********************//
+    else if(current_id == -1)
     {
-            find_wuzi_flag = false;//wuzi是物资的意思,找到物资标志位为false
+            find_wuzi_flag = 0;//wuzi是物资的意思,找到物资标志位为false
+            ROS_INFO("find_wuzi_flag = %d", find_wuzi_flag);
             std_msgs::UInt8 fu;
             fu.data = static_cast<uint8_t>(find_wuzi_flag ? 1 : 0);
             pub_find_wuzi_flag.publish(fu);
+           
     
             find_center = false;//center是靶子的意思，找到靶子标志位为false
-        
     }
 
     //如果主办方临时要求加数字，这里就写else if(pt_det_msg.data[2]>=0 && pt_det_msg.data[2]<=100) ......
@@ -537,7 +551,6 @@ void turn_on_robot::callback_voice_switch(const std_msgs::UInt8::ConstPtr &msg){
 
 void turn_on_robot::callback_stop_point_signal(const std_msgs::UInt8::ConstPtr &msg){
   stop_point_signal_msg= static_cast<int>(msg->data);
-  std::cout << "stop_msgs = " << stop_point_signal_msg << std::endl;
 }
 
 void turn_on_robot::callback_monter_control(const geometry_msgs::Twist::ConstPtr &msg)
@@ -556,37 +569,41 @@ void turn_on_robot::callback_monter_control(const geometry_msgs::Twist::ConstPtr
 
 void turn_on_robot::moveHitGoalCallback(const std_msgs::UInt8::ConstPtr &msg)
 {
-  move_hit_goal_flag_local = static_cast<int>(msg->data);
+  move_hit_goal_flag_local = static_cast<uint8_t>(msg->data);
 }
-
+void turn_on_robot::callback_road_points_index(const std_msgs::Int32::ConstPtr &msg)
+{
+  current_road_point_index = msg->data;
+}
 void turn_on_robot::CaremaMontorControl()
 {
-  //这边是第一阶段 起步移动打靶
+    //**************这边是云台移动策略第一阶段 起步移动打靶***********//
   if(move_hit_goal_flag_local==1){//表示此时还没到达第一个物资点，我们让云台往左偏，移动打靶（白嫖分数，反正子弹无限，移动打靶也无妨）
-    // ====================== 左右扫描（Yaw）参数 ======================
-    static int direction_yaw = -1;      // 左右方向
-    static int step_yaw = 80;          // 左右步幅
-    static int scan_interval_yaw = 0;    // 左右独立计时器
-    static int period_yaw = 1;         // 左右周期（越大越慢）
+     if(find_center==false){//第一阶段也要分情况，如果没找到靶子才巡航,找到了就瞄准
+          // ====================== 左右扫描（Yaw）参数 ======================
+        static int direction_yaw = -1;      // 左右方向
+        static int step_yaw = 80;          // 左右步幅
+        static int scan_interval_yaw = 0;    // 左右独立计时器
+        static int period_yaw = 1;         // 左右周期（越大越慢）
 
-    // ====================== 左右轴 独立定时移动 ======================
-    if (scan_interval_yaw++ >= period_yaw)
-    {
-      scan_interval_yaw = 0;
-      moveBaseControl.Position_1 += direction_yaw * step_yaw;
+        // ====================== 左右轴 独立定时移动 ======================
+        if (scan_interval_yaw++ >= period_yaw)
+        {
+          scan_interval_yaw = 0;
+          moveBaseControl.Position_1 += direction_yaw * step_yaw;
 
-      // 左右限位
-      if (moveBaseControl.Position_1 >= 2047)
-        direction_yaw = -1;
-      else if (moveBaseControl.Position_1 <= 100)
-        direction_yaw = 1;
+          // 左右限位
+          if (moveBaseControl.Position_1 >= 2047)
+            direction_yaw = -1;
+          else if (moveBaseControl.Position_1 <= 100)
+            direction_yaw = 1;
+        }
      }
-
   }
-  else if(stop_point_signal_msg == 1){
-   
-    moveBaseControl.Position_0 = 1750;//云台上移部分，固定仰角，根据物资高度自行决定
-
+    //**************这边是云台移动策略第二阶段 停车点寻找物资***********//
+  else if(stop_point_signal_msg == 1 && current_road_point_index<16){
+    //********到达物资点
+    moveBaseControl.Position_0 = 1900;//云台上移部分，固定仰角，根据物资高度自行决定
     // ====================== 左右扫描（Yaw）参数 ======================
     static int direction_yaw = -1;      // 左右方向
     static int step_yaw = 80;          // 左右步幅
@@ -606,24 +623,65 @@ void turn_on_robot::CaremaMontorControl()
         direction_yaw = 1;
      }
   }
-   // ====================== 速度设置 ======================
-  moveBaseControl.Speed_0 = 5000;
-  moveBaseControl.Speed_1 = 2400;
+  //**************这边是云台移动策略第三阶段 打靶点停车搜索***********//
+  else if(stop_point_signal_msg == 1 && current_road_point_index==16){
+    //********到达打靶点
+    if(find_center==false){//如果没找到靶子就继续扫描
+      moveBaseControl.Position_0 = 2000;//根据靶子高度自行决定
+      // ====================== 左右扫描（Yaw）参数 ======================
+      static int direction_yaw = -1;      // 左右方向
+      static int step_yaw = 80;          // 左右步幅
+      static int scan_interval_yaw = 0;    // 左右独立计时器
+      static int period_yaw = 1;         // 左右周期（越大越慢）
 
+      // ====================== 左右轴 独立定时移动 ======================
+      if (scan_interval_yaw++ >= period_yaw)
+      {
+        scan_interval_yaw = 0;
+        moveBaseControl.Position_1 += direction_yaw * step_yaw;
+
+        // 左右限位
+        if (moveBaseControl.Position_1 >= 4000)
+          direction_yaw = -1;
+        else if (moveBaseControl.Position_1 <= 100)
+          direction_yaw = 1;
+      }
+    }
+  }else{
+    //如果没有看到停车点，云台保持初始位置
+    moveBaseControl.Position_0 = 2047;//根据靶子高度自行决定
+    moveBaseControl.Position_1 = 2047;//云台水平初始位置，根据实际情况调整
+
+  }
+   // ====================== 速度设置 ======================
+  moveBaseControl.Speed_0 = 4000;
+  moveBaseControl.Speed_1 = 2400;
 }
 
 
-void turn_on_robot::callback_offset_center(const std_msgs::Int32MultiArray::ConstPtr &msg)//触发就是打靶
+void turn_on_robot::callback_offset_center(const std_msgs::Int32MultiArray::ConstPtr &msg)//触发该回调函数 就是找到靶子了
 {
+//尽情地调pid吧Cjw哥哥
+//                   ／＞　 フ      
+//                   | 　  _　_|       
+//                 ／` ミ＿xノ     
+//                / 　　   　 |      
+//              /　 ヽ　　  ﾉ     
+//             │　  　|　| 　|     
+//           ／￣|　　 |　 |　| 
+//           | (￣ヽ＿_ヽ_) __) 
+//          ＼二つ         
   std_msgs::Int32MultiArray temp_msg = *msg;
 
-  moveBaseControl.Position_0 = curYuntai_feedback_data.Position_0 + (temp_msg.data[1] / 2);
-  moveBaseControl.Position_1 = curYuntai_feedback_data.Position_1 + (temp_msg.data[0] / 2);
 
-  moveBaseControl.Speed_0 = CaremaSpeedControl(moveBaseControl.Position_0, curYuntai_feedback_data.Position_0);
-  moveBaseControl.Speed_1 = CaremaSpeedControl(moveBaseControl.Position_1, curYuntai_feedback_data.Position_1); 
+  //temp_msg.data[1] / 2是当前靶子距离屏幕重心的偏移量
+  moveBaseControl.Position_0 = curYuntai_feedback_data.Position_0 + (temp_msg.data[1] / 2);//云台当前的y轴位置
+  moveBaseControl.Position_1 = curYuntai_feedback_data.Position_1 + (temp_msg.data[0] / 2);//云台当前的x轴位置
 
-  if(abs(temp_msg.data[1]) < 10 && abs(temp_msg.data[0]) <10){
+  moveBaseControl.Speed_0 = CaremaSpeedControl(moveBaseControl.Position_0, curYuntai_feedback_data.Position_0);//用pid算出y轴速度
+  moveBaseControl.Speed_1 = CaremaSpeedControl(moveBaseControl.Position_1, curYuntai_feedback_data.Position_1);//用pid算出x轴速度
+
+  if(abs(temp_msg.data[1]) < 10 && abs(temp_msg.data[0]) <10){//如果目标
     std_msgs::UInt8 shotdata;
     shotdata.data =1;
     pub_LaserShot_Command.publish(shotdata);

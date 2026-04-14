@@ -89,6 +89,7 @@
 #include <sstream>
 #include <iostream>
 #include <fstream>
+#include <std_msgs/Int32.h>
 
 #define STOP_DIS 0.25
 
@@ -274,7 +275,8 @@ namespace move_base
     ros::Publisher hgglobalplannerpub;
     ros::Publisher hglocationpub;
     ros::Publisher stop_point_signal;
-
+    ros::Publisher pub_move_hit_goal;
+    
     std_msgs::UInt8 stop_point_signal_msg;
     move_base_msgs::hgpathplanner suggestroad;
     move_base_msgs::hglocation currentlocation;
@@ -287,7 +289,8 @@ namespace move_base
 
     ros::Publisher vis_pub;
     ros::Publisher angle_pub;
-    ros::Publisher move_hit_goal_pub;
+
+    ros::Publisher road_points_index_pub;
     int move_hit_goal_flag;
     int find_wuzi_flag;
     ros::Subscriber sub_find_wuzi_flag;

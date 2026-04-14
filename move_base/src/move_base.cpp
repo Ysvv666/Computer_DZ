@@ -100,6 +100,9 @@ namespace move_base
     current_goal_pub_ = private_nh.advertise<geometry_msgs::PoseStamped>("current_goal", 0);
     plan_pub_ = private_nh.advertise<nav_msgs::Path>("plan", 1);
     all_plan_pub_ = private_nh.advertise<nav_msgs::Path>("allplan", 1);
+    // Initialize flags to safe default values
+    move_hit_goal_flag = 1;
+    find_wuzi_flag = 0;
 
     ros::NodeHandle action_nh("move_base");
     action_goal_pub_ = action_nh.advertise<move_base_msgs::MoveBaseActionGoal>("goal", 1);
@@ -207,7 +210,7 @@ namespace move_base
     sub_lasersScan = nh.subscribe("scan", 1, &MoveBase::callback_lasersScan, this);
     sub_saveMapping = nh.subscribe("savemapping", 1, &MoveBase::callback_saveMapping, this);
     sub_self_material_number = nh.subscribe("self_Material_Number", 1, &MoveBase::callback_selfMaterialNumber, this);//����
-
+    sub_find_wuzi_flag = nh.subscribe("find_wuzi_flag", 1, &MoveBase::callback_find_wuzi_flag, this);
 
     hgglobalplannerpub = private_nh.advertise<move_base_msgs::hgpathplanner>("hgglobalplanner", 10);
     hglocationpub = private_nh.advertise<move_base_msgs::hglocation>("hglocation", 10);
@@ -217,12 +220,14 @@ namespace move_base
 
     stop_point_signal = private_nh.advertise<std_msgs::UInt8>("stop_signal",1);
 
-    // advertise move_hit_goal flag so other nodes can subscribe
-    move_hit_goal_pub = private_nh.advertise<std_msgs::UInt8>("move_hit_goal_flag", 1);
-    sub_find_wuzi_flag = private_nh.subscribe<std_msgs::UInt8>("find_wuzi_flag", 1, &MoveBase::callback_find_wuzi_flag, this);
+    // publish current road points index globally so other nodes (e.g. dzactuator) can react
+    road_points_index_pub = private_nh.advertise<std_msgs::Int32>("/road_points_index", 1);
 
-    // initialize flag default value to 1
-    move_hit_goal_flag = 1;
+
+    pub_move_hit_goal = nh.advertise<std_msgs::UInt8>("move_hit_goal_flag", 1);
+
+
+
 
     std::vector<std::string> mapFolders = {
         road_paths_savePath,//��ŵ���·����1.txt,2.txt,3.txt...,
@@ -233,7 +238,14 @@ namespace move_base
     {
       std_msgs::UInt8 msg;
       msg.data = static_cast<uint8_t>(true);
-      move_hit_goal_pub.publish(msg);
+      pub_move_hit_goal.publish(msg);//刚开始初始化发布1，表示此时还是第一阶段，即跑打
+    }
+
+    // publish initial road_points_index
+    {
+      std_msgs::Int32 idx_msg;
+      idx_msg.data = road_points_index;
+      road_points_index_pub.publish(idx_msg);
     }
 
     //����·�� ȫ������road_paths
@@ -450,6 +462,7 @@ namespace move_base
 void MoveBase::callback_find_wuzi_flag(const std_msgs::UInt8::ConstPtr &msg)
   {
     find_wuzi_flag = msg->data;
+    ROS_INFO("Received find_wuzi_flag: %d", find_wuzi_flag);
   }
 
   void MoveBase::callback_selfMaterialNumber(const std_msgs::UInt8MultiArray::ConstPtr &msg)
@@ -769,46 +782,53 @@ void MoveBase::callback_find_wuzi_flag(const std_msgs::UInt8::ConstPtr &msg)
               publishZeroVelocity();
               continue;
             }
-            /***********����ͣ��**********/
 
+
+            /***********到达路径点**********/
             if (detectReachedGoal(current_position, stopPoints[road_points_index]))
             {
               publishZeroVelocity();
-              printf("move_base-->reached stoppoint!!! %d\n",road_points_index);
-              //**xmjjo**// 
-              if(road_points_index>0){
-                move_hit_goal_flag=0;
-                std_msgs::UInt8 mf;
-                mf.data = static_cast<uint8_t>(move_hit_goal_flag);
-                move_hit_goal_pub.publish(mf);
+              printf("move_base-->reached path_point  %d\n",road_points_index);
+
+              if(road_points_index==0){//已经到达第一个路径点位，取消移动打靶
+                    move_hit_goal_flag=0;
+                    std_msgs::UInt8 mf;
+                    mf.data = static_cast<uint8_t>(move_hit_goal_flag);
+                    pub_move_hit_goal.publish(mf);
               }
+                //这里会把到达第几个停止点发布出去（0-17）
+                std_msgs::Int32 idx_msg;
+                idx_msg.data = road_points_index;
+                road_points_index_pub.publish(idx_msg);
+              
+              //判断是不是裁判下发的物资点id
               const bool is_long_stop_point = (long_stop_point_indices.find(road_points_index) != long_stop_point_indices.end());
               if (is_long_stop_point && !(road_points_index == stopPoints.size() - 1)) {
-                printf("move_base-->stop_point_signal_msg.data =1; \n");
+                //该点是裁判下发的物资点id
+                printf("move_base-->reached stop_point  %d\n",road_points_index); 
+                ROS_INFO("Start to find wuzi!!!!!!!!!!!!!!!!!!!!!!!");//ysvv   
+                
                 stop_point_signal_msg.data =1;
-                stop_point_signal.publish(stop_point_signal_msg);              
-              }
-              const double stop_duration_sec = is_long_stop_point ? 1: 0;//ͣ��ʱ�䣺Ŀ���10s����Ŀ���0.02s
-              if(stop_duration_sec==1){//1表示需要在这里停止
-                printf("move_base-->long stop point, stop for %.2f seconds\n", stop_duration_sec);
-                stop_point_signal_msg.data =1;
-                stop_point_signal.publish(stop_point_signal_msg);              
-            
-                printf("Start to find wuzi!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");//ysvv
+                stop_point_signal.publish(stop_point_signal_msg);   
+             
+
                 ros::Time find_start = ros::Time::now();
                 while (find_wuzi_flag == 0)
                 {
+                  ROS_INFO("%d\n",find_wuzi_flag);
+                  ROS_INFO("Stopping.............................................");
                   if ((ros::Time::now() - find_start).toSec() > 10.0)
                   {
                     ROS_WARN("move_base: timeout waiting for find_wuzi_flag after 10s, continuing");
                     break;
                   }
-                  ros::Duration(0.2).sleep(); //越小 表示检测到物资就走得 越快
+                  ros::Duration(0.05).sleep(); //越小 表示检测到物资就走得 越快
                 }
               }
-             
+            
               SP_deleted_flag = 1;
               road_points_index++;
+              // publish updated index when we move to next stop point
               roadPoints = road_paths[road_points_index];
               new_plan = true;
               stop_point_signal_msg.data =0;

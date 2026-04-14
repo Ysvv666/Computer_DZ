@@ -23,6 +23,7 @@
 #include <sensor_msgs/Imu.h>
 #include <std_msgs/UInt8.h>
 #include <std_msgs/Int32MultiArray.h>
+#include <std_msgs/Int32.h>
 
 using namespace std;
 
@@ -218,12 +219,15 @@ public:
 	ros::Subscriber sub_monter_control;
 	ros::Subscriber sub_offset_center;
 	ros::Subscriber move_hit_goal_sub;
+	ros::Subscriber sub_road_points_index;
+	int current_road_point_index = 0;
 	
 	void callback_monter_control(const geometry_msgs::Twist::ConstPtr &msg);
 	void callback_offset_center(const std_msgs::Int32MultiArray::ConstPtr &msg);
 	void callback_pt_det_topic(const std_msgs::Int32MultiArray::ConstPtr &msg);
 
 	void moveHitGoalCallback(const std_msgs::UInt8::ConstPtr &msg);
+	void callback_road_points_index(const std_msgs::Int32::ConstPtr &msg);
 
 
 	ros::Publisher  odom_publisher;
@@ -297,7 +301,7 @@ public:
 	int move_hit_goal_flag_local;
 	bool find_center;
 	bool find_wuzi;
-	bool find_wuzi_flag;
+	int find_wuzi_flag;
 	int count_return_center;
 	bool return_center;
 

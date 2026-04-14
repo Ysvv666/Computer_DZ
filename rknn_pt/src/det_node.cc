@@ -84,6 +84,7 @@ int main(int argc, char **argv) {
     
     // ROS主循环 
     ros::Rate loop_rate(60);
+     ros::Duration(3).sleep();//ysvv,防止一开启所有节点就开始识别输入数据
     while (ros::ok()) {
 
         // cap >> ros_frame;
