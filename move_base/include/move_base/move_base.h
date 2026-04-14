@@ -81,6 +81,8 @@
 #include <std_msgs/ByteMultiArray.h>
 #include <std_msgs/UInt8MultiArray.h>
 
+// NOTE: flag is now communicated via ROS topic; no extern global here
+
 #include "std_msgs/String.h"
 #include <std_msgs/Float32.h>
 #include <std_msgs/UInt8.h>
@@ -285,6 +287,10 @@ namespace move_base
 
     ros::Publisher vis_pub;
     ros::Publisher angle_pub;
+    ros::Publisher move_hit_goal_pub;
+    int move_hit_goal_flag;
+    int find_wuzi_flag;
+    ros::Subscriber sub_find_wuzi_flag;
     ros::Publisher plan_pub_;
     ros::Publisher all_plan_pub_;
     int maxstopIndex;
@@ -312,6 +318,7 @@ namespace move_base
     void callback_saveMapping(const std_msgs::UInt8::ConstPtr &msg);
     //**xmjjo**// 
     void callback_selfMaterialNumber(const std_msgs::UInt8MultiArray::ConstPtr &msg);
+    void callback_find_wuzi_flag(const std_msgs::UInt8::ConstPtr &msg);
 
     void pub_stopP_marks();
     int detectReachedGoal(const geometry_msgs::PoseStamped &currentPose, geometry_msgs::PoseStamped &stopPose);

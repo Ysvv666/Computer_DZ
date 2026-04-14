@@ -47,6 +47,8 @@
 #include <tf2/convert.h>
 #include <tf2/utils.h>
 
+
+
 namespace move_base
 {
 
@@ -201,6 +203,7 @@ namespace move_base
     road_points_index = 0;
     stop_point_signal_msg.data = 0;
 
+
     sub_lasersScan = nh.subscribe("scan", 1, &MoveBase::callback_lasersScan, this);
     sub_saveMapping = nh.subscribe("savemapping", 1, &MoveBase::callback_saveMapping, this);
     sub_self_material_number = nh.subscribe("self_Material_Number", 1, &MoveBase::callback_selfMaterialNumber, this);//����
@@ -214,11 +217,24 @@ namespace move_base
 
     stop_point_signal = private_nh.advertise<std_msgs::UInt8>("stop_signal",1);
 
+    // advertise move_hit_goal flag so other nodes can subscribe
+    move_hit_goal_pub = private_nh.advertise<std_msgs::UInt8>("move_hit_goal_flag", 1);
+    sub_find_wuzi_flag = private_nh.subscribe<std_msgs::UInt8>("find_wuzi_flag", 1, &MoveBase::callback_find_wuzi_flag, this);
+
+    // initialize flag default value to 1
+    move_hit_goal_flag = 1;
 
     std::vector<std::string> mapFolders = {
         road_paths_savePath,//��ŵ���·����1.txt,2.txt,3.txt...,
         stop_points_savePath};
     loadAllMaps(mapFolders);
+
+    // publish initial flag value
+    {
+      std_msgs::UInt8 msg;
+      msg.data = static_cast<uint8_t>(true);
+      move_hit_goal_pub.publish(msg);
+    }
 
     //����·�� ȫ������road_paths
     roadPoints = road_paths[road_points_index];//road_paths�� stop_Points�����������loadAllMaps�������صģ�������һ����·����ÿ��·������һ������
@@ -431,7 +447,11 @@ namespace move_base
       printf("move_base callback_saveMapping--> saveMapping = false\n");
     }
   }
-//**xmjjo**// 
+void MoveBase::callback_find_wuzi_flag(const std_msgs::UInt8::ConstPtr &msg)
+  {
+    find_wuzi_flag = msg->data;
+  }
+
   void MoveBase::callback_selfMaterialNumber(const std_msgs::UInt8MultiArray::ConstPtr &msg)
   {
     long_stop_point_indices.clear();
@@ -756,6 +776,12 @@ namespace move_base
               publishZeroVelocity();
               printf("move_base-->reached stoppoint!!! %d\n",road_points_index);
               //**xmjjo**// 
+              if(road_points_index>0){
+                move_hit_goal_flag=0;
+                std_msgs::UInt8 mf;
+                mf.data = static_cast<uint8_t>(move_hit_goal_flag);
+                move_hit_goal_pub.publish(mf);
+              }
               const bool is_long_stop_point = (long_stop_point_indices.find(road_points_index) != long_stop_point_indices.end());
               if (is_long_stop_point && !(road_points_index == stopPoints.size() - 1)) {
                 printf("move_base-->stop_point_signal_msg.data =1; \n");
@@ -763,11 +789,22 @@ namespace move_base
                 stop_point_signal.publish(stop_point_signal_msg);              
               }
               const double stop_duration_sec = is_long_stop_point ? 1: 0;//ͣ��ʱ�䣺Ŀ���10s����Ŀ���0.02s
-              if(stop_duration_sec==1){
+              if(stop_duration_sec==1){//1表示需要在这里停止
                 printf("move_base-->long stop point, stop for %.2f seconds\n", stop_duration_sec);
                 stop_point_signal_msg.data =1;
-                printf("睡觉10s");
-                ros::Duration(10).sleep();//这边设置停止点的时常Ysvv********************************************
+                stop_point_signal.publish(stop_point_signal_msg);              
+            
+                printf("Start to find wuzi!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");//ysvv
+                ros::Time find_start = ros::Time::now();
+                while (find_wuzi_flag == 0)
+                {
+                  if ((ros::Time::now() - find_start).toSec() > 10.0)
+                  {
+                    ROS_WARN("move_base: timeout waiting for find_wuzi_flag after 10s, continuing");
+                    break;
+                  }
+                  ros::Duration(0.2).sleep(); //越小 表示检测到物资就走得 越快
+                }
               }
              
               SP_deleted_flag = 1;

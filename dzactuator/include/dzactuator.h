@@ -72,7 +72,6 @@ using namespace std;
 #define ACCEl_RATIO 1671.84f
 
 extern sensor_msgs::Imu Mpu6050; // External variables, IMU topic data //外部变量，IMU话题数据
-
 // Covariance matrix for speedometer topic data for robt_pose_ekf feature pack
 // 协方差矩阵，用于里程计话题数据，用于robt_pose_ekf功能包
 const double odom_pose_covariance[36] = {1e-3, 0, 0, 0, 0, 0,
@@ -218,10 +217,13 @@ public:
 
 	ros::Subscriber sub_monter_control;
 	ros::Subscriber sub_offset_center;
+	ros::Subscriber move_hit_goal_sub;
 	
 	void callback_monter_control(const geometry_msgs::Twist::ConstPtr &msg);
 	void callback_offset_center(const std_msgs::Int32MultiArray::ConstPtr &msg);
 	void callback_pt_det_topic(const std_msgs::Int32MultiArray::ConstPtr &msg);
+
+	void moveHitGoalCallback(const std_msgs::UInt8::ConstPtr &msg);
 
 
 	ros::Publisher  odom_publisher;
@@ -234,6 +236,7 @@ public:
 	ros::Publisher  pub_LaserShot_Command;
 	ros::Publisher  pub_voice_switch;
 	ros::Publisher  pub_offset_center;
+	ros::Publisher  pub_find_wuzi_flag;
 
 	void Publish_Odom();			   // Pub the speedometer topic //发布里程计话题
 	void Publish_ImuSensor();		   // Pub the IMU sensor topic //发布IMU传感器话题
@@ -291,8 +294,10 @@ public:
 	double leftDistance;
 	double rightDistance;
 	int stop_point_signal_msg;
+	int move_hit_goal_flag_local;
 	bool find_center;
 	bool find_wuzi;
+	bool find_wuzi_flag;
 	int count_return_center;
 	bool return_center;
 
