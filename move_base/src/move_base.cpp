@@ -813,7 +813,7 @@ void MoveBase::callback_find_wuzi_flag(const std_msgs::UInt8::ConstPtr &msg)
              
 
                 ros::Time find_start = ros::Time::now();
-                while ((ros::ok() && find_wuzi_flag == 0) || ((ros::Time::now() - find_start).toSec() <3.0))//ros::ok(）是为了防止阻塞进程无法正常关闭
+                while ((ros::ok() && find_wuzi_flag == 0) || ((ros::Time::now() - find_start).toSec() <1.0))//ros::ok(）是为了防止阻塞进程无法正常关闭
                 {                                                                                                                                   //3秒内就算找到物资也不走，防止误判导致没识别到真正的物资
                   ROS_INFO("Stopping.............................................");                                                        //后期国赛模型识别度高之后建议改成2秒，甚至1秒0秒
                   ros::spinOnce();//处理回调函数！！！！！！！！！！！                    因为我们前面对识别的要求已经很高了，不仅判断连续4-7次，也判断置信度
