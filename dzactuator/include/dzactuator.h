@@ -259,6 +259,15 @@ public:
 	double normalizeAngle(double angle);
 	double CaremaSpeedControl(int target_pose,int current_pose);
 	void CaremaMontorControl();
+	void CaremaMontorControl_Move(
+		int initial_direction,   // 初始方向 -1左 / 1右
+		int step_yaw,            // 移动步长
+		int period_yaw,           // 左右扫描周期
+		int left_limit,          // 左边限位
+		int right_limit,         // 右边限位
+		int speed_y,             // 云台Y轴速度
+		int speed_x             // 云台X轴速度
+	);
 
 	double g0;
 	double err_ax;

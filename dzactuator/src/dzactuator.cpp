@@ -483,7 +483,7 @@ void turn_on_robot::callback_pt_det_topic(const std_msgs::Int32MultiArray::Const
     static int msg_trust_count = 0; // static表示只被初始化了一次,识别到同类东西的计数器
     static int last_id = -2;        // 记录上一次的物品ID，初始值不可能出现
 
-    ROS_INFO("pt_det_msg.data[2] = %d", pt_det_msg.data[2]);//打印id
+
 
     int current_id = pt_det_msg.data[2];
 
@@ -496,22 +496,24 @@ void turn_on_robot::callback_pt_det_topic(const std_msgs::Int32MultiArray::Const
     }
 
     // 次数未到，不进入后续处理
-    if(msg_trust_count <= 5) {//判断五次相同才认为看到同一个东西（没识别到也同理）
-        return;
+    if(msg_trust_count <= 5 && current_id >= 101 && current_id <= 115) {//判断五次物资相同才认为看到同一个东西（没识别到也同理）
+        return;//这边是为了提高靶子的锁定稳定性
     }
 
-
+    ROS_INFO("pt_det_msg.data[2] = %d", pt_det_msg.data[2]);//打印id
 
  //*********************识别到靶子**********************//
-    if(current_id == 116 || current_id == 117 || current_id == 118) //识别到goal(没亮),redgoal,unhitgoal(bluegoal)
-    {
+    if(current_id == 116 || current_id == 117 || current_id == 118) 
+    { //识别到id分别对应redgoal,unhitgoal(bluegoal)，goal(没亮)
+
         find_center = true;
         pub_offset_center.publish(*msg);
     }
 
     //*********************识别到物资**********************//
     else if(current_id >= 101 && current_id <= 115) //识别到物资
-    {   
+    {     
+          find_center = false;
           if(stop_point_signal_msg == 1){//确保此时是停止状态，防止行进过程中误报
                 //**************判断置信度ysvv***************/
                 if (msg->data[3]>60){ //如果置信度大于xx%  这个值根据现场情况调节
@@ -575,87 +577,89 @@ void turn_on_robot::callback_road_points_index(const std_msgs::Int32::ConstPtr &
 {
   current_road_point_index = msg->data;
 }
-void turn_on_robot::CaremaMontorControl()
-{
-    //**************这边是云台移动策略第一阶段 起步移动打靶***********//
-  if(move_hit_goal_flag_local==1){//表示此时还没到达第一个物资点，我们让云台往左偏，移动打靶（白嫖分数，反正子弹无限，移动打靶也无妨）
-     if(find_center==false){//第一阶段也要分情况，如果没找到靶子才巡航,找到了就瞄准
-          // ====================== 左右扫描（Yaw）参数 ======================
-        static int direction_yaw = -1;      // 左右方向
-        static int step_yaw = 80;          // 左右步幅
-        static int scan_interval_yaw = 0;    // 左右独立计时器
-        static int period_yaw = 1;         // 左右周期（越大越慢）
-
-        // ====================== 左右轴 独立定时移动 ======================
-        if (scan_interval_yaw++ >= period_yaw)
-        {
-          scan_interval_yaw = 0;
-          moveBaseControl.Position_1 += direction_yaw * step_yaw;
-
-          // 左右限位
-          if (moveBaseControl.Position_1 >= 2047)
-            direction_yaw = -1;
-          else if (moveBaseControl.Position_1 <= 100)
-            direction_yaw = 1;
-        }
-     }
-  }
-    //**************这边是云台移动策略第二阶段 停车点寻找物资***********//
-  else if(stop_point_signal_msg == 1 && current_road_point_index<16){
-    //********到达物资点
-    moveBaseControl.Position_0 = 1900;//云台上移部分，固定仰角，根据物资高度自行决定
-    // ====================== 左右扫描（Yaw）参数 ======================
-    static int direction_yaw = -1;      // 左右方向
-    static int step_yaw = 80;          // 左右步幅
-    static int scan_interval_yaw = 0;    // 左右独立计时器
-    static int period_yaw = 1;         // 左右周期（越大越慢）
+void turn_on_robot::CaremaMontorControl_Move(
+    int initial_direction,   // 初始方向 -1左 / 1右
+    int step_yaw,            // 移动步长
+    int period_yaw,           // 左右扫描周期
+    int left_limit,          // 左边限位
+    int right_limit,         // 右边限位
+    int speed_y,             // 云台Y轴速度
+    int speed_x              // 云台X轴速度
+){
+    // ====================== 静态状态保存 ======================
+    static int direction_yaw = initial_direction; // 当前方向
+    static int scan_interval_yaw = 0;             // 左右独立计时器
 
     // ====================== 左右轴 独立定时移动 ======================
     if (scan_interval_yaw++ >= period_yaw)
     {
-      scan_interval_yaw = 0;
-      moveBaseControl.Position_1 += direction_yaw * step_yaw;
-
-      // 左右限位
-      if (moveBaseControl.Position_1 >= 4000)
-        direction_yaw = -1;
-      else if (moveBaseControl.Position_1 <= 100)
-        direction_yaw = 1;
-     }
-  }
-  //**************这边是云台移动策略第三阶段 打靶点停车搜索***********//
-  else if(stop_point_signal_msg == 1 && current_road_point_index==16){
-    //********到达打靶点
-    if(find_center==false){//如果没找到靶子就继续扫描
-      moveBaseControl.Position_0 = 2000;//根据靶子高度自行决定
-      // ====================== 左右扫描（Yaw）参数 ======================
-      static int direction_yaw = -1;      // 左右方向
-      static int step_yaw = 80;          // 左右步幅
-      static int scan_interval_yaw = 0;    // 左右独立计时器
-      static int period_yaw = 1;         // 左右周期（越大越慢）
-
-      // ====================== 左右轴 独立定时移动 ======================
-      if (scan_interval_yaw++ >= period_yaw)
-      {
         scan_interval_yaw = 0;
         moveBaseControl.Position_1 += direction_yaw * step_yaw;
 
         // 左右限位
-        if (moveBaseControl.Position_1 >= 4000)
-          direction_yaw = -1;
-        else if (moveBaseControl.Position_1 <= 100)
-          direction_yaw = 1;
-      }
+        if (moveBaseControl.Position_1 >= right_limit)
+            direction_yaw = -1;
+        else if (moveBaseControl.Position_1 <= left_limit)
+            direction_yaw = 1;
     }
-  }else{
-    //如果没有看到停车点，云台保持初始位置
+
+    // 云台速度
+    moveBaseControl.Speed_0 = speed_y;   // 云台Y轴速度
+    moveBaseControl.Speed_1 = speed_x;   // 云台X轴速度
+}
+void turn_on_robot::CaremaMontorControl()
+{
+  //***************这边是云台移动策略第一阶段 起步移动打靶******************//
+  if(move_hit_goal_flag_local==1 && find_center==false){//表示此时还没到达第一个物资点，我们让云台往左偏，移动打靶（白嫖分数，反正子弹无限，移动打靶也无妨）
+      CaremaMontorControl_Move(-1, 400, 10, 100, 2000, 1000, 1000);
+  }//初始方向，移动步长，移动周期，左边限位，右边限位，云台Y轴速度，云台X轴速度
+  
+
+  
+  //**************这边是云台移动策略第二阶段 停车点寻找物资***********//
+  else if(stop_point_signal_msg == 1 && (current_road_point_index==0 )){//********到达物资点1，优先往左看
+    moveBaseControl.Position_0 = 1800;//云台上移部分，固定仰角，根据物资高度自行决定
+    CaremaMontorControl_Move(-1, 80, 1, 100, 2000, 3000, 3000);
+  }//初始方向，移动步长，移动周期，左边限位，右边限位，云台Y轴速度，云台X轴速度  
+
+  else if(stop_point_signal_msg == 1 && (current_road_point_index==2
+                                                                || current_road_point_index==4 
+                                                                || current_road_point_index==6
+                                                                || current_road_point_index==8
+                                                                || current_road_point_index==9
+                                                                || current_road_point_index==11
+                                                                || current_road_point_index==14)){//********到达物资点，优先往左看
+    moveBaseControl.Position_0 = 1900;//云台上移部分，固定仰角，根据物资高度自行决定
+    CaremaMontorControl_Move(-1, 80, 1, 100, 2000, 3000, 3000);
+  }//初始方向，移动步长，移动周期，左边限位，右边限位，云台Y轴速度，云台X轴速度
+
+  else if(stop_point_signal_msg == 1 && (current_road_point_index==1
+                                                                || current_road_point_index==3
+                                                                || current_road_point_index==5
+                                                                || current_road_point_index==7
+                                                                || current_road_point_index==10
+                                                                || current_road_point_index==12
+                                                                || current_road_point_index==13
+                                                                || current_road_point_index==15)){//********到达物资点，优先往右看
+    moveBaseControl.Position_0 = 1900;//云台上移部分，固定仰角，根据物资高度自行决定
+    CaremaMontorControl_Move(1, 80, 1, 2047, 4000, 3000, 3000);
+  }//初始方向，移动步长，移动周期，左边限位，右边限位，云台Y轴速度，云台X轴速度
+
+
+  //**************这边是云台移动策略第三阶段 打靶点停车搜索***********//
+  else if(stop_point_signal_msg == 1 && current_road_point_index==16 && find_center==false){//********到达打靶点
+    moveBaseControl.Position_0 = 1950;//根据靶子高度自行决定
+    CaremaMontorControl_Move(-1, 80, 1, 1300, 2700, 3000, 3000);
+  }//初始方向，移动步长，移动周期，左边限位，右边限位，云台Y轴速度，云台X轴速度
+
+
+ //**************这边是云台移动策略第四阶段 “自由阶段”，不受停车点限制，如果没看到靶子才保持朝前状态***********//
+  else if(find_center==false)
+  {
+    //如果到停车点,并且没看到靶子，云台保持初始位置
     moveBaseControl.Position_0 = 2047;//根据靶子高度自行决定
     moveBaseControl.Position_1 = 2047;//云台水平初始位置，根据实际情况调整
-
   }
-   // ====================== 速度设置 ======================
-  moveBaseControl.Speed_0 = 4000;
-  moveBaseControl.Speed_1 = 2400;
 }
 
 
@@ -671,6 +675,7 @@ void turn_on_robot::callback_offset_center(const std_msgs::Int32MultiArray::Cons
 //           ／￣|　　 |　 |　| 
 //           | (￣ヽ＿_ヽ_) __) 
 //          ＼二つ         
+  ROS_INFO("Fire!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
   std_msgs::Int32MultiArray temp_msg = *msg;
 
 
@@ -681,7 +686,7 @@ void turn_on_robot::callback_offset_center(const std_msgs::Int32MultiArray::Cons
   moveBaseControl.Speed_0 = CaremaSpeedControl(moveBaseControl.Position_0, curYuntai_feedback_data.Position_0);//用pid算出y轴速度
   moveBaseControl.Speed_1 = CaremaSpeedControl(moveBaseControl.Position_1, curYuntai_feedback_data.Position_1);//用pid算出x轴速度
 
-  if(abs(temp_msg.data[1]) < 10 && abs(temp_msg.data[0]) <10){//如果目标
+  if(abs(temp_msg.data[1]) < 10 && abs(temp_msg.data[0]) <10 && stop_point_signal_msg == 1) {//如果目标在视野中心Fire，并且急停（不急停怎么打FPS??）！！！
     std_msgs::UInt8 shotdata;
     shotdata.data =1;
     pub_LaserShot_Command.publish(shotdata);
@@ -697,9 +702,9 @@ double turn_on_robot::CaremaSpeedControl(int target_pose,int current_pose){
     static double integral = 0.0;
     static double filtered_derivative = 0.0;
 
-    static constexpr double kp = 40.0;              // 稳定的比例增益
-    static constexpr double ki = 0.01;            // 更低的积分增益
-    static constexpr double kd = 0.03;             // 减小的微分增益
+    static constexpr double kp =  800.0;              // 稳定的比例增益
+    static constexpr double ki = 1.5;            // 更低的积分增益
+    static constexpr double kd = 4;             // 减小的微分增益
     static constexpr double max_speed = 3700.0;    // 最大速度限制
     static constexpr double sampling_time = 0.01;  // 采样时间 (10Hz)
 
@@ -715,8 +720,8 @@ double turn_on_robot::CaremaSpeedControl(int target_pose,int current_pose){
     filtered_derivative = 0.8 * filtered_derivative + 0.2 * derivative;
 
     // PID 控制计算
-    // double speed = kp * error + ki * integral + kd * filtered_derivative;
-    double speed = kp * error ;
+    double speed = kp * error + ki * integral + kd * filtered_derivative;
+    // double speed = kp * error ;
 
     // 对速度取绝对值
     speed = std::abs(speed);

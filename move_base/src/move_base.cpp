@@ -784,7 +784,7 @@ void MoveBase::callback_find_wuzi_flag(const std_msgs::UInt8::ConstPtr &msg)
             }
 
 
-            /***********到达路径点**********/
+            /***********到达路径点**********///0-17
             if (detectReachedGoal(current_position, stopPoints[road_points_index]))
             {
               publishZeroVelocity();
@@ -796,6 +796,9 @@ void MoveBase::callback_find_wuzi_flag(const std_msgs::UInt8::ConstPtr &msg)
                     mf.data = static_cast<uint8_t>(move_hit_goal_flag);
                     pub_move_hit_goal.publish(mf);
               }
+              if(road_points_index==16){
+                ros::Duration(30).sleep(); //打靶停止时间根据最后时间看！一共是3min！！！！！！！！Ysvv！！这里要改
+              }
                 //这里会把到达第几个停止点发布出去（0-17）
                 std_msgs::Int32 idx_msg;
                 idx_msg.data = road_points_index;
@@ -803,8 +806,8 @@ void MoveBase::callback_find_wuzi_flag(const std_msgs::UInt8::ConstPtr &msg)
               
               //判断是不是裁判下发的物资点id
               const bool is_long_stop_point = (long_stop_point_indices.find(road_points_index) != long_stop_point_indices.end());
-              if (is_long_stop_point && !(road_points_index == stopPoints.size() - 1)) {
-                //该点是裁判下发的物资点id
+              if (is_long_stop_point && !(road_points_index == stopPoints.size() - 1)) {//road_points_index == stopPoints.size() - 1
+                //该点是裁判下发的物资点id                                                                             表示不是最后一个点：基地
                 printf("move_base-->reached stop_point  %d\n",road_points_index); 
                 ROS_INFO("Start to find wuzi!!!!!!!!!!!!!!!!!!!!!!!");//ysvv   
                 
@@ -818,7 +821,7 @@ void MoveBase::callback_find_wuzi_flag(const std_msgs::UInt8::ConstPtr &msg)
                   ROS_INFO("Stopping.............................................");                                                        //后期国赛模型识别度高之后建议改成2秒，甚至1秒0秒
                   ros::spinOnce();//处理回调函数！！！！！！！！！！！                    因为我们前面对识别的要求已经很高了，不仅判断连续4-7次，也判断置信度
 
-                  ros::Duration(0.05).sleep(); //越小 表示检测到物资就走得 越”快“
+                  ros::Duration(0.02).sleep(); //越小 表示检测到物资就走得 越”快“
 
                   if ((ros::Time::now() - find_start).toSec() > 10.0)//如果小车停止10s还没有检测到物资就直接走。
                   {
