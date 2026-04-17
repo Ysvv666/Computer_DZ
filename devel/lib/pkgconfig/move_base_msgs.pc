@@ -1,0 +1,8 @@
+prefix=/home/duzhong/dzacs/devel
+
+Name: move_base_msgs
+Description: Description of move_base_msgs
+Version: 0.0.0
+Cflags: -I/home/duzhong/dzacs/devel/include
+Libs: -L${prefix}/lib 
+Requires: message_runtime std_msgs geometry_msgs

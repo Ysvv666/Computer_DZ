@@ -1,0 +1,2 @@
+clear_costmap_recovery:dzactuator:dzjudgment:dzsavepath:lidar_process:move_base:rknn_pt:rplidar_ros:teleop_wsad
+-DCATKIN_DEVEL_PREFIX=/home/duzhong/dzacs/devel -DCMAKE_INSTALL_PREFIX=/home/duzhong/dzacs/install -G Unix Makefiles
